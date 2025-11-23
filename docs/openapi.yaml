@@ -1,0 +1,768 @@
+openapi: 3.0.0
+info:
+  title: UniVent API
+  version: 3.0.0
+  description: |
+    # UniVent API Documentation
+    
+    Bine ați venit la documentația oficială a platformei UniVent - sistemul centralizat pentru managementul evenimentelor universitare. Acest API oferă funcționalități complete pentru trei tipuri de actori: Studenți, Organizatori și Administratori.
+
+    ## Funcționalități Cheie
+    * **Public & Studenți:** Explorare evenimente cu filtre avansate, înscriere (generare bilet QR), feedback și istoric personal.
+    * **Organizatori:** Creare și gestionare evenimente, monitorizare înscrieri și validare acces (Check-in).
+    * **Admin:** Moderare conținut și vizualizare rapoarte globale.
+
+    ## Cum să începi
+    1. **Autentificare:** Folosește `/auth/login` pentru a obține un `Bearer Token`.
+    2. **Roluri:** Token-ul conține rolul utilizatorului (`STUDENT`, `ORGANIZER`, `ADMIN`). Anumite endpoint-uri sunt protejate pe bază de rol.
+    3. **Filtrare:** Endpoint-ul `/events` suportă filtrare complexă. Vezi documentația parametrului `filters` pentru detalii.
+
+    ## Fluxuri Comune
+    * **Înscriere:** `POST /tickets` cu ID-ul evenimentului.
+    * **Validare la intrare:** Aplicația de scanat apelează `POST /check-in/scan` cu conținutul QR-ului.
+  
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: Autentificare, Înregistrare și gestionarea sesiunii JWT.
+  - name: Users
+    description: Managementul profilului personal, preferințelor și setărilor academice.
+  - name: Associations
+    description: Nomenclator public de asociații (util pentru filtre și pagini de profil).
+  - name: Events
+    description: Core Business - Căutare, Listare, Creare și Management evenimente.
+  - name: Tickets
+    description: Zona Student - Gestionarea înscrierilor și a portofelului de bilete.
+  - name: Check-in
+    description: Zona Operațională - Scanarea și validarea biletelor la intrare.
+  - name: System
+    description: Zona Admin - Rapoarte globale și configurări de sistem.
+
+paths:
+  # ==============================================
+  # 1. AUTHENTICATION
+  # ==============================================
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentificare utilizator
+      description: Verifică credențialele și returnează un token JWT care conține rolul utilizatorului (STUDENT, ORGANIZER, ADMIN).
+      security: []
+      requestBody:
+        required: true
+        description: Credențialele de acces (email instituțional recomandat).
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login reușit. Returnează token-ul și datele de bază ale profilului.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Înregistrare cont nou
+      description: Creează un cont nou de tip STUDENT. Rolurile superioare se acordă manual de către Admin.
+      security: []
+      requestBody:
+        required: true
+        description: Datele necesare pentru crearea contului.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Cont creat cu succes. Utilizatorul poate face login imediat.
+
+  # ==============================================
+  # 2. ASSOCIATIONS
+  # ==============================================
+  /associations:
+    get:
+      tags: [Associations]
+      summary: Listare asociații
+      description: Returnează lista tuturor asociațiilor active. Folosit pentru popularea dropdown-urilor de filtrare din Frontend.
+      security: []
+      responses:
+        '200':
+          description: Lista completă de asociații (format simplificat).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssociationSimple'
+
+  /associations/{id}:
+    get:
+      tags: [Associations]
+      summary: Detalii publice asociație
+      description: Afișează profilul public al unei asociații (descriere, contact, link-uri social media).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: ID-ul unic al asociației (UUID).
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Profilul detaliat al asociației.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssociationDetail'
+
+  # ==============================================
+  # 3. EVENTS
+  # ==============================================
+  /events:
+    get:
+      tags: [Events]
+      summary: Listare Evenimente (Public)
+      description: >
+        Endpoint-ul principal pentru Feed-ul de evenimente. 
+        Returnează o listă paginată de carduri (EventPreview).
+        Dacă request-ul conține un token valid, câmpul `isRegistered` va fi calculat pentru fiecare eveniment.
+      security: [] # Poate fi apelat și anonim
+      parameters:
+        - in: query
+          name: filters
+          description: Obiect complex de filtrare (search, dată, tip, asociație etc.) "explodat" în parametri URL.
+          style: form
+          explode: true
+          schema:
+            $ref: '#/components/schemas/EventFilterQuery'
+      responses:
+        '200':
+          description: Rezultatele căutării (paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: 
+                    type: array
+                    items: { $ref: '#/components/schemas/EventPreview' }
+                  total: { type: integer, description: "Numărul total de rezultate pentru paginare." }
+
+    post:
+      tags: [Events]
+      summary: (Organizator) Propune Eveniment Nou
+      description: >
+        Creează un eveniment în starea PENDING. Necesită rol de ORGANIZER.
+        Include detalii logistice, imagini și agendă.
+      requestBody:
+        required: true
+        description: Datele complete ale evenimentului propus.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreateRequest'
+      responses:
+        '201':
+          description: Eveniment creat cu succes. Așteaptă aprobare.
+          content:
+             application/json:
+               schema: { $ref: '#/components/schemas/EventResponse' }
+
+  /events/recommendations:
+    get:
+      tags: [Events]
+      summary: Evenimente Recomandate
+      description: >
+        Returnează o listă de evenimente bazată pe preferințele setate în profilul utilizatorului (tag-uri, facultate) 
+        și istoricul participărilor anterioare.
+      responses:
+        '200':
+          description: Lista de recomandări personalizate.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EventPreview' }
+
+  /events/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID-ul evenimentului.
+        schema: { type: string, format: uuid }
+    
+    get:
+      tags: [Events]
+      summary: Detalii complete eveniment
+      description: >
+        Returnează toate informațiile despre un eveniment (inclusiv descriere lungă, agendă, galerie).
+        Dacă userul e logat, verifică statusul înscrierii.
+      security: [] 
+      responses:
+        '200':
+          description: Obiectul complet al evenimentului.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventResponse' }
+
+    put:
+      tags: [Events]
+      summary: (Organizator) Editare eveniment
+      description: Permite modificarea detaliilor unui eveniment existent. Doar creatorul sau un Admin poate face asta.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventCreateRequest' }
+      responses:
+        '200': { description: Eveniment actualizat cu succes. }
+
+    delete:
+      tags: [Events]
+      summary: (Organizator/Admin) Ștergere
+      description: Șterge (sau marchează ca șters - soft delete) un eveniment.
+      responses:
+        '204': { description: Eveniment șters. Nu returnează conținut. }
+
+  /events/{id}/status:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID-ul evenimentului de moderat.
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Events]
+      summary: (Admin) Aprobare/Respingere
+      description: Endpoint pentru fluxul de moderare. Adminul aprobă publicarea sau respinge (cu motiv).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: 
+                  $ref: '#/components/schemas/EnumEventStatus'
+                rejectionReason: { type: string, description: "Obligatoriu dacă statusul este REJECTED." }
+      responses:
+        '200': { description: Status actualizat. Evenimentul devine vizibil (sau ascuns). }
+
+  /events/{id}/participants:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID-ul evenimentului.
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Events]
+      summary: (Organizator) Listă Participanți & Export
+      description: >
+        Returnează lista studenților înscriși.
+        Dacă parametrul `format` este specificat, returnează un fișier (CSV/PDF) pentru descărcare.
+      parameters:
+        - in: query
+          name: format
+          description: Formatul dorit. Dacă lipsește, returnează JSON.
+          schema: 
+            $ref: '#/components/schemas/EnumExportFormat'
+      responses:
+        '200':
+          description: Date JSON sau Stream de fișier (Content-Disposition attachment).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserProfile' }
+
+  /events/{id}/reviews:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: ID-ul evenimentului.
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Events]
+      summary: Adaugă Recenzie
+      description: Permite unui participant (care a fost prezent sau înscris) să lase o notă și un comentariu.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewCreate' }
+      responses:
+        '201': { description: Recenzie adăugată cu succes. }
+    get:
+      tags: [Events]
+      summary: Vezi recenziile
+      description: Listează feedback-ul public pentru acest eveniment.
+      responses:
+        '200':
+          description: Lista de recenzii.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReviewResponse' }
+
+  # ==============================================
+  # 4. TICKETS
+  # ==============================================
+  /tickets:
+    post:
+      tags: [Tickets]
+      summary: Înscriere (JOIN)
+      description: >
+        Înscrie utilizatorul curent la un eveniment. 
+        Generează un bilet unic și un QR code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eventId: { type: string, format: uuid, description: "ID-ul evenimentului la care se face înscrierea." }
+      responses:
+        '201':
+          description: Înscriere reușită. Returnează datele biletului.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketResponse' }
+        '409':
+          description: Eroare - Utilizator deja înscris SAU Locuri epuizate.
+
+    get:
+      tags: [Tickets]
+      summary: Biletele mele
+      description: Returnează istoricul înscrierilor utilizatorului curent (Portofel virtual).
+      responses:
+        '200':
+          description: Lista de bilete active și trecute.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TicketResponse' }
+
+  /tickets/{id}:
+    get:
+      tags: [Tickets]
+      summary: Detalii bilet
+      description: Returnează detaliile unui singur bilet, util pentru afișarea QR code-ului pe tot ecranul.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detalii bilet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketResponse' }
+
+  # ==============================================
+  # 5. CHECK-IN
+  # ==============================================
+  /check-in/scan:
+    post:
+      tags: [Check-in]
+      summary: Validare bilet (Scanare QR)
+      description: >
+        Utilizat de organizatori la intrare. 
+        Primește conținutul scanat din QR, îl decriptează/validează și marchează biletul ca CHECKED_IN.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '200':
+          description: Rezultatul validării (Succes sau Eroare).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean, description: "True dacă accesul este permis." }
+                  message: { type: string, description: "Mesaj pentru operator (ex: 'Acces Permis', 'Bilet deja scanat')." }
+                  studentName: { type: string, description: "Numele studentului pentru verificare vizuală." }
+
+  # ==============================================
+  # 6. USERS
+  # ==============================================
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Datele mele
+      description: Returnează profilul utilizatorului logat, inclusiv datele academice și preferințele.
+      responses:
+        '200':
+          description: Profil utilizator.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProfile' }
+    put:
+      tags: [Users]
+      summary: Actualizare Profil
+      description: Permite modificarea preferințelor și a datelor academice (Facultate, Departament).
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserProfile' }
+      responses:
+        '200': { description: Profil actualizat cu succes. }
+
+  # ==============================================
+  # 7. SYSTEM
+  # ==============================================
+  /system/reports:
+    get:
+      tags: [System]
+      summary: (Admin) Rapoarte
+      description: Returnează statistici globale despre utilizarea platformei (nr. evenimente, participare, top asociații).
+      responses:
+        '200':
+          description: Obiect cu statistici agregate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminReport' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ==========================================
+    # 1. ENUMERATIONS
+    # ==========================================
+    EnumUserRole:
+      type: string
+      enum: [STUDENT, ORGANIZER, ADMIN]
+      description: "Rolul utilizatorului în sistem."
+
+    # Status complet (intern/admin)
+    EnumEventStatus:
+      type: string
+      enum: [DRAFT, PENDING, PUBLISHED, REJECTED, CANCELLED, COMPLETED]
+      description: "Statusul tehnic din baza de date (Ciclul de viață complet)."
+
+    # Status simplificat pentru UI (Public)
+    EnumPublicStatus:
+      type: string
+      enum: [UPCOMING, ONGOING, ENDED, CANCELLED]
+      description: "Status calculat pentru afișare în UI, bazat pe timp și starea internă."
+
+    EnumEventType:
+      type: string
+      enum: [ACADEMIC, SOCIAL, SPORTS, CAREER, VOLUNTEERING, WORKSHOP]
+      description: "Categoria principală a evenimentului."
+
+    EnumLocationType:
+      type: string
+      enum: [IN_CAMPUS, IN_CITY, OUTSIDE_CITY, ONLINE]
+      description: "Clasificarea locației pentru filtrare rapidă."
+
+    EnumTicketStatus:
+      type: string
+      enum: [CONFIRMED, CHECKED_IN, CANCELLED]
+      description: "Starea curentă a biletului unui student."
+
+    EnumExportFormat:
+      type: string
+      enum: [json, csv, pdf]
+      description: "Formatele suportate pentru exportul listelor."
+      
+    EnumOrganizerType:
+      type: string
+      description: "Tipul entității organizatoare (Instituțională vs Studențească)."
+      enum: [STUDENT_ORG, UNIVERSITY_DEPT, COMPANY, OTHER]
+
+    # ==========================================
+    # 2. SUB-OBJECTS (Agenda, Socials)
+    # ==========================================
+    AgendaItem:
+      type: object
+      description: "Un element din orarul (timeline-ul) evenimentului."
+      properties:
+        time: 
+          type: string
+          example: "10:00 - 11:30"
+          description: "Intervalul orar."
+        title: 
+          type: string
+          example: "Keynote Speaker"
+          description: "Titlul activității."
+        description: 
+          type: string
+          description: "Detalii suplimentare despre activitate."
+        speakers: 
+          type: array
+          items: { type: string }
+          example: ["Dr. Popescu"]
+          description: "Lista persoanelor care vorbesc (dacă e cazul)."
+
+    SocialLinks:
+      type: object
+      description: "Colecție de link-uri externe ale asociației."
+      properties:
+        website: { type: string, format: uri }
+        instagram: { type: string, format: uri }
+        facebook: { type: string, format: uri }
+        linkedin: { type: string, format: uri }
+
+    # ==========================================
+    # 3. DATA TRANSFER OBJECTS (DTOs)
+    # ==========================================
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "student@usv.ro" }
+        password: { type: string, format: password }
+    
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, description: "Email instituțional." }
+        password: { type: string, format: password }
+        fullName: { type: string, example: "Ion Popescu" }
+        faculty: { type: string, description: "Facultatea de apartenență (Opțional la înregistrare)." }
+
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string, description: "JWT Token pentru autentificare la request-urile viitoare." }
+        user: { $ref: '#/components/schemas/UserProfile' }
+
+    UserProfile:
+      type: object
+      description: "Datele complete ale profilului utilizator."
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        fullName: { type: string }
+        role: { $ref: '#/components/schemas/EnumUserRole' }
+        faculty: { type: string }
+        department: { type: string }
+        preferences:
+          type: array
+          items: { $ref: '#/components/schemas/EnumEventType' }
+          description: "Lista categoriilor de interes pentru utilizator."
+
+    AssociationSimple:
+      type: object
+      description: "Versiune simplificată a asociației, pentru liste și referințe."
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        logoUrl: { type: string }
+        type: { $ref: '#/components/schemas/EnumOrganizerType' }
+    
+    AssociationDetail:
+      allOf:
+        - $ref: '#/components/schemas/AssociationSimple'
+        - type: object
+          properties:
+            description: { type: string }
+            contactEmail: { type: string }
+            socialLinks: { $ref: '#/components/schemas/SocialLinks' }
+
+    EventCreateRequest:
+      type: object
+      description: "DTO pentru crearea sau editarea unui eveniment."
+      required: [title, startAt, endAt, locationName, organizerIds]
+      properties:
+        organizerIds: 
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+          description: "Lista ID-urilor asociațiilor organizatoare."
+        title: { type: string }
+        description: { type: string }
+        type: { $ref: '#/components/schemas/EnumEventType' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        locationName: { type: string, description: "Numele locației (ex: 'Corp C')." }
+        locationType: { $ref: '#/components/schemas/EnumLocationType' }
+        coverImageUrl: { type: string, description: "Imaginea principală (Banner)." }
+        galleryImageUrls: 
+          type: array
+          items: { type: string }
+          description: "Link-uri către alte imagini."
+        agenda:
+          type: array
+          description: "Lista de activități din cadrul evenimentului."
+          items: { $ref: '#/components/schemas/AgendaItem' }
+
+    # DTO "Ușor" pentru Liste (Carduri)
+    EventPreview:
+      type: object
+      description: "Versiune redusă a evenimentului, optimizată pentru afișarea în liste și carduri."
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        coverImageUrl: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        locationName: { type: string }
+        
+        status: 
+          $ref: '#/components/schemas/EnumPublicStatus'
+        
+        organizers:
+          type: array
+          items: { $ref: '#/components/schemas/AssociationSimple' }
+        
+        isRegistered:
+          type: boolean
+          description: "Dacă true, utilizatorul curent (din token) este deja înscris."
+
+    # DTO Complet pentru Pagina de Detalii
+    EventResponse:
+      allOf:
+        - $ref: '#/components/schemas/EventPreview'
+        - type: object
+          properties:
+            description: { type: string }
+            type: { $ref: '#/components/schemas/EnumEventType' }
+            locationType: { $ref: '#/components/schemas/EnumLocationType' }
+            currentParticipants: { type: integer }
+            galleryImageUrls: 
+              type: array
+              items: { type: string }
+            agenda:
+              type: array
+              items: { $ref: '#/components/schemas/AgendaItem' }
+
+    TicketResponse:
+      type: object
+      description: "Biletul digital al studentului."
+      properties:
+        id: { type: string, format: uuid }
+        eventTitle: { type: string }
+        eventStartAt: { type: string, format: date-time }
+        qrCodeContent: { type: string, description: "String criptat pentru generarea codului QR vizual." }
+        status: { $ref: '#/components/schemas/EnumTicketStatus' }
+
+    CheckInRequest:
+      type: object
+      required: [qrContent, eventId]
+      properties:
+        qrContent: { type: string, description: "Conținutul citit de scanner." }
+        eventId: { type: string, format: uuid }
+
+    ReviewCreate:
+      type: object
+      required: [rating]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }
+
+    ReviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/ReviewCreate'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            userName: { type: string }
+            createdAt: { type: string, format: date-time }
+            authorTicketStatus:
+              allOf:
+                - $ref: '#/components/schemas/EnumTicketStatus'
+                - description: "Statusul participării autorului (ex: CHECKED_IN confirmă prezența)."
+    
+    EventFilterQuery:
+      type: object
+      description: "Filtre avansate. Câmpurile array permit selecție multiplă (OR logic implicit, dacă nu se specifică altfel)."
+      properties:
+        page: 
+          type: integer
+          default: 1
+        limit: 
+          type: integer
+          default: 20
+        search: 
+          type: string
+          description: "Căutare text (titlu, descriere)"
+        
+        # --- 1. TIPURI EVENIMENT (Cu logică AND/OR) ---
+        types: 
+          type: array
+          description: "Lista tipurilor selectate (ex: [SOCIAL, SPORTS])"
+          items: { $ref: '#/components/schemas/EnumEventType' }
+        
+        matchAllTypes:
+          type: boolean
+          default: false
+          description: >
+            Flag pentru logica de filtrare a tipurilor:
+            - FALSE (Default): Returnează evenimentele care sunt de tip A **SAU** B.
+            - TRUE: Returnează evenimentele care sunt și A **ȘI** B.
+
+        # --- 2. ORGANIZATORI (Asociații specifice) ---
+        associationIds: 
+          type: array
+          description: "Selectare asociații specifice (ex: doar evenimentele ASUS și OSF)"
+          items: { type: string, format: uuid }
+
+        # --- 3. TIP ORGANIZATOR (Univ/Stud/Companii) ---
+        organizerTypes:
+          type: array
+          description: "Filtrare după natura organizatorului"
+          items: { $ref: '#/components/schemas/EnumOrganizerType' }
+
+        # --- 4. LOCAȚIE (Categorii) ---
+        locationTypes:
+          type: array
+          description: "Selectare multiplă (ex: IN_CAMPUS + IN_CITY)"
+          items: { $ref: '#/components/schemas/EnumLocationType' }
+
+        # --- 5. ACADEMIC (Facultate/Departament) ---
+        faculties:
+          type: array
+          description: "Lista facultăților selectate (ex: ['FIESC', 'FEAA'])"
+          items: { type: string }
+        
+        departments:
+          type: array
+          description: "Lista departamentelor selectate"
+          items: { type: string }
+
+        # --- 6. TIMP ---
+        dateFrom: 
+          type: string
+          format: date-time
+        dateTo: 
+          type: string
+          format: date-time
+          
+        status:
+          type: array
+          description: >
+            [PROTEJAT] Permite filtrarea după starea tehnică.
+            - Studenții: Ignorat (backend-ul forțează PUBLISHED).
+            - Organizatori: Pot cere DRAFT, PENDING, REJECTED pentru asociația lor.
+            - Adminii: Pot cere PENDING pentru a vedea coada de aprobare.
+          items: { $ref: '#/components/schemas/EnumEventStatus' }
+
+
+    AdminReport:
+      type: object
+      properties:
+        totalEvents: { type: integer }
+        totalRegistrations: { type: integer }
+        attendanceRate: { type: number }
+        topAssociations: 
+          type: array
+          items: { type: string }
