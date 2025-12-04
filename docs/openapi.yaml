@@ -40,6 +40,9 @@ tags:
   - name: System
     description: Zona Admin - Rapoarte globale și configurări de sistem.
 
+servers:
+  - url: http://localhost:4000
+    description: Server Local (Development)
 paths:
   # ==============================================
   # 1. AUTHENTICATION
@@ -528,14 +531,14 @@ components:
       required: [email, password]
       properties:
         email: { type: string, format: email, example: "student@usv.ro" }
-        password: { type: string, format: password }
+        password: { type: string, format: password, example: "123456" }
     
     RegisterRequest:
       type: object
       required: [email, password, fullName]
       properties:
-        email: { type: string, format: email, description: "Email instituțional." }
-        password: { type: string, format: password }
+        email: { type: string, format: email, description: "Email instituțional.", example: "student@usv.ro" }
+        password: { type: string, format: password, example: "123456" }
         fullName: { type: string, example: "Ion Popescu" }
         faculty: { type: string, description: "Facultatea de apartenență (Opțional la înregistrare)." }
 
