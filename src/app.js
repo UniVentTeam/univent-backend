@@ -7,8 +7,11 @@ const eventRoutes = require('./routes/eventRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const checkInRoutes = require('./routes/checkInRoutes');
 const systemRoutes = require('./routes/systemRoutes');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
 
-
+const swaggerDocument = YAML.load(path.join(process.cwd(), 'docs', 'openapi.yaml'));
 
 
 const app = express();
@@ -16,6 +19,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.get("/", (req, res) => {
   res.send("UniVent API is running...");
@@ -31,3 +35,4 @@ app.use('/system', systemRoutes);
 
 
 module.exports = app;
+
