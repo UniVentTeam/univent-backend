@@ -57,29 +57,28 @@ exports.joinEvent = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
-
-
 exports.getMyTickets = async (req, res) => {
-    try {
-      const userId = req.user.id;
-  
-      const tickets = await Ticket.find({ userId }).lean();
-  
-      const result = tickets.map(t => ({
-        id: t._id,
-        eventTitle: t.eventTitle,
-        eventStartAt: t.eventStartAt,
-        qrCodeContent: t.qrCodeContent,
-        status: t.status
-      }));
-  
-      res.json(result);
-  
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
-    }
-  };
+  try {
+    const userId = req.user.id;
+
+    const tickets = await Ticket.find({ userId }).lean();
+
+    const result = tickets.map(t => ({
+      id: t._id,
+      eventId: t.eventId,          // 🔥 ADAUGAT
+      eventTitle: t.eventTitle,
+      eventStartAt: t.eventStartAt,
+      qrCodeContent: t.qrCodeContent,
+      status: t.status
+    }));
+
+    res.json(result);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 
 
