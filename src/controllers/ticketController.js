@@ -1,6 +1,7 @@
 const Ticket = require('../models/Ticket');
 const Event = require('../models/Event');
-
+const User = require('../models/User');
+const { sendTicketEmail } = require('../utils/emailService');
 
 // POST /tickets
 exports.joinEvent = async (req, res) => {
@@ -43,6 +44,24 @@ exports.joinEvent = async (req, res) => {
     // 6. Increment event participants
     event.currentParticipants += 1;
     await event.save();
+
+    // 7. Trimitere Email Confirmare
+    // Căutăm userul în bază pentru a-i lua emailul și numele
+    const user = await User.findById(userId);
+
+    if (user) {
+      // Apelăm funcția din utils. Putem pune 'await' sau nu.
+      // Dacă punem await, clientul așteaptă până pleacă mailul.
+      // Recomandat să lăsăm fără await dacă vrem viteză maximă,
+      // sau cu await dar în try/catch separat dacă vrem siguranță.
+      await sendTicketEmail(
+        user.email,
+        user.fullName, // sau user.firstName, depinde de model
+        event.title,
+        event.startAt,
+        ticket._id
+      );
+    }
 
     return res.status(201).json({
       id: ticket._id,
