@@ -11,10 +11,10 @@ const agendaItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const eventSchema = new mongoose.Schema({
-  organizerIds: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
+  organizerIds: [{
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Association',
-    required: true 
+    required: true
   }],
 
   rejectionReason: { type: String, default: null },
@@ -22,13 +22,16 @@ const eventSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: String,
 
-  type: { type: String, enum: EnumEventType, required: true },
+  // Relaxed validation for DRAFT status
+  type: { type: String, enum: EnumEventType },
 
-  startAt: { type: Date, required: true },
-  endAt: { type: Date, required: true },
+  startAt: { type: Date },
+  endAt: { type: Date },
 
-  locationName: { type: String, required: true },
+  locationName: { type: String },
   locationType: { type: String, enum: EnumLocationType },
+
+  maxParticipants: { type: Number }, // Added field
 
   coverImageUrl: String,
   galleryImageUrls: [String],
@@ -37,8 +40,6 @@ const eventSchema = new mongoose.Schema({
   status: { type: String, enum: EnumEventStatus, default: "PENDING" },
 
   currentParticipants: { type: Number, default: 0 }
-
-  
 
 });
 

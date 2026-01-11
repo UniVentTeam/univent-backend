@@ -14,14 +14,17 @@ const auth = require("../middlewares/authMiddleware");
 const requireRole = require("../middlewares/roleMiddleware");
 const { addReview, getReviews } = require("../controllers/reviewController");
 
+const upload = require("../config/cloudinary");
+
 router.get("/", auth.optional, getEvents);
 router.get("/recommendations", auth.required, getRecommendations);
-router.post("/", auth.required, requireRole("ORGANIZER", "ADMIN"), createEvent);
+router.post("/", auth.required, requireRole("ORGANIZER", "ADMIN"), upload.single('coverImage'), createEvent);
 router.get("/:id", auth.optional, getEventDetails);
 router.put(
   "/:id",
   auth.required,
   requireRole("ORGANIZER", "ADMIN"),
+  upload.single('coverImage'),
   updateEvent
 );
 
