@@ -89,6 +89,26 @@ paths:
   # 2. ASSOCIATIONS
   # ==============================================
   /associations:
+    post:
+      tags: [Associations]
+      summary: (Organizator) Creare asociație nouă
+      description: Creează o asociație nouă și îl setează pe utilizatorul curent ca administrator. Necesită rol de ORGANIZER sau ADMIN.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: Datele necesare pentru crearea asociației.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssociationCreateRequest'
+      responses:
+        '201':
+          description: Asociație creată cu succes. Returnează datele complete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssociationDetail'
     get:
       tags: [Associations]
       summary: Listare asociații
@@ -122,6 +142,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssociationDetail'
+
+  /associations/mine:
+    get:
+      tags: [Associations]
+      summary: (Organizator) Listare asociații administrate
+      description: Returnează lista asociațiilor pentru care utilizatorul curent (din token) este administrator. Folosit în dashboard-ul de organizator.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista asociațiilor administrate de utilizator.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssociationSimple'
+
 
   # ==============================================
   # 3. EVENTS
@@ -547,6 +585,18 @@ components:
       properties:
         token: { type: string, description: "JWT Token pentru autentificare la request-urile viitoare." }
         user: { $ref: '#/components/schemas/UserProfile' }
+
+    AssociationCreateRequest:
+      type: object
+      description: "DTO pentru crearea unei asociații noi."
+      required: [name, type]
+      properties:
+        name: { type: string }
+        logoUrl: { type: string }
+        type: { $ref: '#/components/schemas/EnumOrganizerType' }
+        description: { type: string }
+        contactEmail: { type: string, format: email }
+        socialLinks: { $ref: '#/components/schemas/SocialLinks' }
 
     UserProfile:
       type: object

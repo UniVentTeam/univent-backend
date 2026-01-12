@@ -59,7 +59,8 @@ exports.joinEvent = async (req, res) => {
         user.fullName, // sau user.firstName, depinde de model
         event.title,
         event.startAt,
-        ticket._id
+        ticket._id,
+        ticket.qrCodeContent
       );
     }
 
