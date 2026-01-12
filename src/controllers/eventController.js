@@ -4,6 +4,7 @@ const Ticket = require('../models/Ticket'); // pentru isRegistered
 const User = require('../models/User');
 const { Parser } = require('json2csv');
 const PDFDocument = require('pdfkit');
+const { sendEventPendingEmail, sendEventStatusUpdate } = require('../utils/emailService');
 
 exports.getEvents = async (req, res) => {
   try {
@@ -155,7 +156,6 @@ exports.getEvents = async (req, res) => {
   }
 };
 
-
 exports.createEvent = async (req, res) => {
     try {
       const user = req.user;
@@ -206,6 +206,14 @@ exports.createEvent = async (req, res) => {
         status: "PENDING",
         currentParticipants: 0
       });
+
+      // Trimitere email către admini
+      const admins = await User.find({ role: 'ADMIN' });
+      const adminEmails = admins.map(admin => admin.email);
+      if (adminEmails.length > 0) {
+        const organizer = await User.findById(user.id);
+        await sendEventPendingEmail(adminEmails, event, organizer.fullName);
+      }
   
       res.status(201).json(event);
   
@@ -390,8 +398,19 @@ exports.getRecommendations = async (req, res) => {
           event[field] = req.body[field];
         }
       });
+
+      // La orice modificare, evenimentul reintră în PENDING
+      event.status = 'PENDING';
   
       await event.save();
+
+      // Notificăm adminii
+      const admins = await User.find({ role: 'ADMIN' });
+      const adminEmails = admins.map(admin => admin.email);
+      if (adminEmails.length > 0) {
+        const organizer = await User.findById(user.id);
+        await sendEventPendingEmail(adminEmails, event, organizer.fullName);
+      }
   
       res.json({
         message: "Event updated successfully",
@@ -462,7 +481,7 @@ exports.getRecommendations = async (req, res) => {
       }
   
       // 2️⃣ Luăm evenimentul
-      const event = await Event.findById(eventId);
+      const event = await Event.findById(eventId).populate('organizerIds');
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
@@ -500,6 +519,18 @@ exports.getRecommendations = async (req, res) => {
   
       // 4️⃣ Salvăm
       await event.save();
+
+      // 5️⃣ Notificăm organizatorii dacă e aprobat/respins
+      if (status === 'PUBLISHED' || status === 'REJECTED') {
+        const organizerAdmins = await User.find({
+          _id: { $in: event.organizerIds.flatMap(org => org.admins) }
+        });
+        const organizerEmails = organizerAdmins.map(admin => admin.email);
+
+        if (organizerEmails.length > 0) {
+          await sendEventStatusUpdate(organizerEmails, event, status, rejectionReason);
+        }
+      }
   
       return res.json({
         message: "Status updated",

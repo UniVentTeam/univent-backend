@@ -1,45 +1,110 @@
 // src/utils/emailService.js
 const nodemailer = require('nodemailer');
+const qrcode = require('qrcode');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",  // Specificăm explicit serverul Google
-  port: 465,               // Folosind portul 465 (SSL) este adesea mai sigur și trece de firewall-uri
-  secure: true,            // true pentru portul 465, false pentru alte porturi
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
 });
 
-/**
- * Trimite email de confirmare bilet
- */
-const sendTicketEmail = async (toEmail, userName, eventTitle, eventDate, ticketId) => {
+const sendEmail = async (to, subject, html, attachments = []) => {
+  // Verificam daca trimiterea de emailuri este activata in .env
+  if (process.env.EMAIL_ENABLED !== 'true') {
+    console.log('📧 Email sending is disabled. Would have sent to:', to);
+    return;
+  }
+
   try {
     const mailOptions = {
       from: `"Univent Team" <${process.env.EMAIL_USER}>`,
-      to: toEmail,
-      subject: `Biletul tău pentru: ${eventTitle}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
-          <h2 style="color: #4CAF50;">Salut, ${userName}!</h2>
-          <p>Înregistrarea ta la evenimentul <strong>${eventTitle}</strong> a fost confirmată.</p>
-          <p><strong>📅 Data:</strong> ${new Date(eventDate).toLocaleString('ro-RO')}</p>
-          <p><strong>🎟️ ID Bilet:</strong> ${ticketId}</p>
-          <hr>
-          <p>Te așteptăm cu drag!</p>
-          <small>Echipa Univent</small>
-        </div>
-      `
+      to,
+      subject,
+      html,
+      attachments
     };
-
     await transporter.sendMail(mailOptions);
-    // console.log(`📧 Email trimis cu succes către ${toEmail}`);
   } catch (error) {
-    console.error("❌ Eroare la trimiterea emailului:", error);
-    // Nu aruncăm eroare (throw) pentru a nu bloca răspunsul către client dacă pică serverul de mail
+    console.error(`❌ Eroare la trimiterea emailului către ${to}:`, error);
   }
 };
 
-module.exports = { sendTicketEmail };
+const sendTicketEmail = async (toEmail, userName, eventTitle, eventDate, ticketId, qrCodeContent) => {
+  const subject = `Biletul tău pentru: ${eventTitle}`;
+  const qrDataUrl = await qrcode.toDataURL(qrCodeContent);
+  const qrAttachment = {
+    filename: 'qrcode.png',
+    path: qrDataUrl,
+    cid: 'qrcode'
+  };
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+      <h2 style="color: #4CAF50;">Salut, ${userName}!</h2>
+      <p>Înregistrarea ta la evenimentul <strong>${eventTitle}</strong> a fost confirmată.</p>
+      <p><strong>📅 Data:</strong> ${new Date(eventDate).toLocaleString('ro-RO')}</p>
+      <p><strong>🎟️ ID Bilet:</strong> ${ticketId}</p>
+      <p>Prezintă acest cod QR la intrare:</p>
+      <img src="cid:qrcode" alt="QR Code" style="width: 200px; height: 200px;"/>
+      <hr>
+      <p>Te așteptăm cu drag!</p>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  await sendEmail(toEmail, subject, html, [qrAttachment]);
+};
+
+const sendNewOrganizerRequest = async (adminEmails, user) => {
+  const subject = `Cerere nouă pentru rolul de Organizator`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+      <h2 style="color: #007bff;">Cerere nouă de la ${user.fullName}</h2>
+      <p>Utilizatorul <strong>${user.fullName}</strong> (${user.email}) a solicitat rolul de Organizator.</p>
+      <p>Poți modifica rolul acestui utilizator din panoul de administrare.</p>
+      <hr>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  await sendEmail(adminEmails, subject, html);
+};
+
+const sendEventStatusUpdate = async (organizerEmails, event, status, rejectionReason = null) => {
+  const isApproved = status === 'PUBLISHED';
+  const subject = `Statusul evenimentului "${event.title}" a fost actualizat`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+      <h2 style="color: ${isApproved ? '#4CAF50' : '#dc3545'};">Evenimentul tău a fost ${isApproved ? 'Aprobat' : 'Respins'}</h2>
+      <p>Evenimentul: <strong>${event.title}</strong></p>
+      ${rejectionReason ? `<p><strong>Motivul respingerii:</strong> ${rejectionReason}</p>` : ''}
+      <hr>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  await sendEmail(organizerEmails, subject, html);
+};
+
+const sendEventPendingEmail = async (adminEmails, event, organizerName) => {
+  const subject = `Eveniment nou în așteptare de la ${organizerName}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+      <h2 style="color: #ffc107;">Eveniment nou în așteptare</h2>
+      <p>Organizatorul <strong>${organizerName}</strong> a creat sau actualizat evenimentul <strong>"${event.title}"</strong>.</p>
+      <p>Acesta așteaptă aprobarea ta în panoul de administrare.</p>
+      <hr>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  await sendEmail(adminEmails, subject, html);
+};
+
+module.exports = { 
+  sendTicketEmail,
+  sendNewOrganizerRequest,
+  sendEventStatusUpdate,
+  sendEventPendingEmail
+};
