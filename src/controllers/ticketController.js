@@ -28,18 +28,20 @@ exports.joinEvent = async (req, res) => {
       return res.status(409).json({ message: "User already registered for this event" });
 
     // 4. Create empty ticket first
+    const date = Date.now();
+
     const ticket = await Ticket.create({
       eventId,
       userId,
       eventTitle: event.title,
       eventStartAt: event.startAt,
       qrCodeContent: "",
-      createdAt: ticket.createdAt, // îl completăm după creare
+      createdAt: date, // îl completăm după creare
       status: "CONFIRMED"
     });
 
     // 5. Generate QR containing TICKET ID, not userId
-    ticket.qrCodeContent = `TICKET-${eventId}-${ticket._id.toString()}-${Date.now()}`;
+    ticket.qrCodeContent = `TICKET-${eventId}-${ticket._id.toString()}-${date}`;
     await ticket.save();
 
     // 6. Increment event participants
