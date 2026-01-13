@@ -132,6 +132,7 @@ exports.getTicketById = async (req, res) => {
       id: ticket._id,
       status: ticket.status,
       qrCodeContent: ticket.qrCodeContent,
+      createdAt: ticket.createdAt,
 
       // Date din Event
       event: {
