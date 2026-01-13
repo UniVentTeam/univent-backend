@@ -7,7 +7,8 @@ const ticketSchema = new mongoose.Schema({
   qrCodeContent: String,
   status: { type: String, enum: EnumTicketStatus },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' }
+  eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
+  createdAt: { type: Date, default: Date.now}
 });
-
+ticketSchema.set('timestamps', true);
 module.exports = mongoose.model('Ticket', ticketSchema);

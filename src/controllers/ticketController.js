@@ -33,7 +33,8 @@ exports.joinEvent = async (req, res) => {
       userId,
       eventTitle: event.title,
       eventStartAt: event.startAt,
-      qrCodeContent: "", // îl completăm după creare
+      qrCodeContent: "",
+      createdAt: ticket.createdAt, // îl completăm după creare
       status: "CONFIRMED"
     });
 
@@ -77,6 +78,7 @@ exports.joinEvent = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 exports.getMyTickets = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -100,32 +102,61 @@ exports.getMyTickets = async (req, res) => {
   }
 };
 
+exports.getTicketById = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const userId = req.user.id;
 
+    // Populăm eventId cu date din Event și organizerIds
+    const ticket = await Ticket.findOne({ _id: ticketId, userId })
+      .populate({
+        path: 'eventId',
+        select: 'title description startAt endAt locationName locationType coverImageUrl agenda currentParticipants organizerIds status',
+        populate: {
+          path: 'organizerIds',
+          select: 'name logoUrl type'  // Selectăm doar câmpurile necesare
+        }
+      })
+      .lean();
 
-  exports.getTicketById = async (req, res) => {
-    try {
-      const ticketId = req.params.id;
-      const userId = req.user.id;
-  
-      const ticket = await Ticket.findOne({ _id: ticketId, userId }).lean();
-  
-      if (!ticket) {
-        return res.status(404).json({ message: "Ticket not found" });
-      }
-  
-      const result = {
-        id: ticket._id,
-        eventTitle: ticket.eventTitle,
-        eventStartAt: ticket.eventStartAt,
-        qrCodeContent: ticket.qrCodeContent,
-        status: ticket.status
-      };
-  
-      res.json(result);
-  
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Server error" });
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found or not yours" });
     }
-  };
-  
+
+    // Construim răspunsul extins
+    const event = ticket.eventId || {};
+
+    const result = {
+      id: ticket._id,
+      status: ticket.status,
+      qrCodeContent: ticket.qrCodeContent,
+
+      // Date din Event
+      event: {
+        id: event._id,
+        title: event.title || ticket.eventTitle,  // Fallback la câmpurile din Ticket
+        description: event.description,
+        startAt: event.startAt || ticket.eventStartAt,
+        endAt: event.endAt,
+        locationName: event.locationName,
+        locationType: event.locationType,
+        coverImageUrl: event.coverImageUrl,
+        currentParticipants: event.currentParticipants || 0,
+        agenda: event.agenda || [],
+        status: event.status,
+        organizers: (event.organizerIds || []).map(org => ({
+          id: org._id,
+          name: org.name,
+          logoUrl: org.logoUrl,
+          type: org.type
+        }))
+      }
+    };
+
+    res.json(result);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
