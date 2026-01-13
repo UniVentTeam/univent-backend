@@ -102,9 +102,32 @@ const sendEventPendingEmail = async (adminEmails, event, organizerName) => {
   await sendEmail(adminEmails, subject, html);
 };
 
+const sendReminderEmail = async (toEmail, userName, eventName, eventDate) => {
+  try {
+    const mailOptions = {
+      from: `"Univent Team" <${process.env.EMAIL_USER}>`,
+      to: toEmail,
+      subject: `🔔 Reminder: Mâine are loc ${eventName}!`,
+      html: `
+        <h3>Salut, ${userName}!</h3>
+        <p>Îți reamintim că evenimentul <strong>${eventName}</strong> începe mâine.</p>
+        <p>📅 Data: ${new Date(eventDate).toLocaleString('ro-RO')}</p>
+        <p>Te rugăm să ai biletul (QR Code) pregătit la intrare.</p>
+        <br>
+        <small>Echipa Univent</small>
+      `
+    };
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error(`Eroare email reminder pentru ${toEmail}:`, error);
+  }
+};
+
+
 module.exports = { 
   sendTicketEmail,
   sendNewOrganizerRequest,
   sendEventStatusUpdate,
-  sendEventPendingEmail
+  sendEventPendingEmail,
+  sendReminderEmail
 };

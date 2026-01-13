@@ -39,8 +39,12 @@ const eventSchema = new mongoose.Schema({
 
   status: { type: String, enum: EnumEventStatus, default: "PENDING" },
 
-  currentParticipants: { type: Number, default: 0 }
+  currentParticipants: { type: Number, default: 0 },
 
+  reminderSent: {
+    type: Boolean,
+    default: false
+  }
 });
 
 
