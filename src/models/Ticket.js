@@ -10,5 +10,5 @@ const ticketSchema = new mongoose.Schema({
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
   createdAt: { type: Date, default: Date.now}
 });
-ticketSchema.set('timestamps', true);
+// ticketSchema.set('timestamps', true);
 module.exports = mongoose.model('Ticket', ticketSchema);
