@@ -1,6 +1,7 @@
 module.exports = [
     "STUDENT",
     "ORGANIZER",
-    "ADMIN"
+    "ADMIN",
+     'BLOCKED'
   ];
   

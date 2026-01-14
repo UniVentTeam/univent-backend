@@ -7,6 +7,7 @@ const eventRoutes = require('./routes/eventRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const checkInRoutes = require('./routes/checkInRoutes');
 const systemRoutes = require('./routes/systemRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const path = require('path');
@@ -31,6 +32,8 @@ app.use('/events', eventRoutes);
 app.use('/tickets', ticketRoutes);
 app.use('/check-in', checkInRoutes);
 app.use('/system', systemRoutes);
+app.use('/admin', adminRoutes);
+
 
 
 

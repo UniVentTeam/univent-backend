@@ -13,6 +13,10 @@ const authRequired = (req, res, next) => {
   try {
     const decoded = verifyToken(token); 
     req.user = decoded;   // { id, role }
+    if (req.user.role === 'BLOCKED') {
+      return res.status(403).json({ message: 'Account is blocked' });
+    }
+    
     next();
   } catch {
     return res.status(401).json({ message: 'Invalid token' });
@@ -37,8 +41,22 @@ const authOptional = (req, res, next) => {
   }
 };
 
+// 🔐 Middleware – doar ADMIN
+const authAdmin = (req, res, next) => {
+  // trebuie folosit DUPĂ required
+  if (!req.user) return res.status(401).json({ message: 'Missing token' });
+
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({ message: 'Forbidden: Admin only' });
+  }
+
+  next();
+};
+
+
 // Exportăm corect ambele funcții
 module.exports = {
   required: authRequired,
-  optional: authOptional
+  optional: authOptional,
+  admin: authAdmin
 };
