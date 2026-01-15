@@ -1,12 +1,14 @@
 const User = require('../models/User');
+const Association = require('../models/Association');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../utils/jwt');
+const { sendOrganizerRequestWithAssociation } = require('../utils/emailService');
 
 
 // REGISTER
 exports.register = async (req, res) => {
   try {
-    const { email, password, fullName, faculty } = req.body;
+    const { email, password, fullName, faculty, associationId } = req.body;
 
     // check unique email
     const exists = await User.findOne({ email });
@@ -28,6 +30,25 @@ exports.register = async (req, res) => {
     });
 
     const token = generateToken(user);
+
+    // If user requested to join an association as organizer
+    if (associationId) {
+      try {
+        const association = await Association.findById(associationId);
+        if (association) {
+          // Find all admins to notify
+          const admins = await User.find({ role: 'ADMIN' });
+          const adminEmails = admins.map(a => a.email);
+          
+          if (adminEmails.length > 0) {
+            await sendOrganizerRequestWithAssociation(adminEmails, user, association.name);
+          }
+        }
+      } catch (emailErr) {
+        console.error("Failed to send association request email:", emailErr);
+        // We don't block registration if email fails
+      }
+    }
 
     // build UserProfile according to Swagger
     const userProfile = {

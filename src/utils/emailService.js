@@ -73,6 +73,20 @@ const sendNewOrganizerRequest = async (adminEmails, user) => {
   await sendEmail(adminEmails, subject, html);
 };
 
+const sendOrganizerRequestWithAssociation = async (adminEmails, user, associationName) => {
+  const subject = `Cerere nouă: Organizator pentru ${associationName}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd;">
+      <h2 style="color: #007bff;">Cerere nouă de la ${user.fullName}</h2>
+      <p>Utilizatorul <strong>${user.fullName}</strong> (${user.email}) dorește să devină organizator pentru asociația <strong>${associationName}</strong>.</p>
+      <p>Verifică detaliile și actualizează rolul/permisiunile din panoul de administrare.</p>
+      <hr>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  await sendEmail(adminEmails, subject, html);
+};
+
 const sendEventStatusUpdate = async (organizerEmails, event, status, rejectionReason = null) => {
   const isApproved = status === 'PUBLISHED';
   const subject = `Statusul evenimentului "${event.title}" a fost actualizat`;
@@ -129,5 +143,6 @@ module.exports = {
   sendNewOrganizerRequest,
   sendEventStatusUpdate,
   sendEventPendingEmail,
-  sendReminderEmail
+  sendReminderEmail,
+  sendOrganizerRequestWithAssociation
 };
