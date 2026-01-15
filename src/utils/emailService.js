@@ -1,15 +1,15 @@
-// src/utils/emailService.js
 const nodemailer = require('nodemailer');
 const qrcode = require('qrcode');
 require('dotenv').config();
 
+// Configurare Mailjet SMTP
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  host: "in-v3.mailjet.com",
+  port: 587,
+  secure: false, // upgrade later with STARTTLS
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: process.env.MAILJET_API_KEY,
+    pass: process.env.MAILJET_API_SECRET
   }
 });
 
@@ -22,15 +22,20 @@ const sendEmail = async (to, subject, html, attachments = []) => {
 
   try {
     const mailOptions = {
-      from: `"Univent Team" <${process.env.EMAIL_USER}>`,
+      from: `"Univent Team" <${process.env.EMAIL_SENDER}>`, // Adresa verificată în Mailjet
       to,
       subject,
       html,
       attachments
     };
     await transporter.sendMail(mailOptions);
+    console.log(`✅ Email trimis către: ${to}`);
   } catch (error) {
     console.error(`❌ Eroare la trimiterea emailului către ${to}:`, error);
+    // Logăm eroarea completă pentru debug
+    if (error.response) {
+      console.error(error.response);
+    }
   }
 };
 
@@ -117,26 +122,20 @@ const sendEventPendingEmail = async (adminEmails, event, organizerName) => {
 };
 
 const sendReminderEmail = async (toEmail, userName, eventName, eventDate) => {
-  try {
-    const mailOptions = {
-      from: `"Univent Team" <${process.env.EMAIL_USER}>`,
-      to: toEmail,
-      subject: `🔔 Reminder: Mâine are loc ${eventName}!`,
-      html: `
-        <h3>Salut, ${userName}!</h3>
-        <p>Îți reamintim că evenimentul <strong>${eventName}</strong> începe mâine.</p>
-        <p>📅 Data: ${new Date(eventDate).toLocaleString('ro-RO')}</p>
-        <p>Te rugăm să ai biletul (QR Code) pregătit la intrare.</p>
-        <br>
-        <small>Echipa Univent</small>
-      `
-    };
-    await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error(`Eroare email reminder pentru ${toEmail}:`, error);
-  }
+  const subject = `🔔 Reminder: Mâine are loc ${eventName}!`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px;">
+      <h3>Salut, ${userName}!</h3>
+      <p>Îți reamintim că evenimentul <strong>${eventName}</strong> începe mâine.</p>
+      <p>📅 Data: ${new Date(eventDate).toLocaleString('ro-RO')}</p>
+      <p>Te rugăm să ai biletul (QR Code) pregătit la intrare.</p>
+      <br>
+      <small>Echipa Univent</small>
+    </div>
+  `;
+  // Folosim sendEmail pentru a beneficia de verificarea EMAIL_ENABLED si error handling centralizat
+  await sendEmail(toEmail, subject, html);
 };
-
 
 module.exports = { 
   sendTicketEmail,
