@@ -5,16 +5,47 @@ const { generateToken } = require('../utils/jwt');
 const { sendOrganizerRequestWithAssociation } = require('../utils/emailService');
 
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmailAndPassword(email, password) {
+  const errors = [];
+
+  if (!email || typeof email !== 'string') {
+    errors.push("Email is required");
+  } else {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!emailRegex.test(normalizedEmail)) {
+      errors.push("Invalid email format");
+    }
+  }
+
+  if (!password || typeof password !== 'string') {
+    errors.push("Password is required");
+  } else {
+    if (password.length < 6) {
+      errors.push("Password must be at least 6 characters long");
+    }
+  }
+
+  return errors;
+}
+
+
 // REGISTER
 exports.register = async (req, res) => {
   try {
     const { email, password, fullName, faculty, associationId } = req.body;
+    const errors = validateEmailAndPassword(email, password);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors[0], errors });
+    }
 
-    // check unique email
-    const exists = await User.findOne({ email });
-    if (exists)
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const exists = await User.findOne({ email: normalizedEmail });
+    if (exists) {
       return res.status(400).json({ message: "Email already in use" });
-
+    }
     // hash password
     const hashed = await bcrypt.hash(password, 10);
 

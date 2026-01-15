@@ -44,7 +44,7 @@ router.get(
   getParticipants
 );
 
-router.post("/:id/reviews", auth.required, addReview);
+router.post("/:id/reviews", auth.required,requireRole("STUDENT"), addReview);
 
 router.get("/:id/reviews", auth.optional, getReviews);
 
