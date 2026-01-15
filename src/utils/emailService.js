@@ -1,17 +1,12 @@
-const nodemailer = require('nodemailer');
+const Mailjet = require('node-mailjet');
 const qrcode = require('qrcode');
 require('dotenv').config();
 
-// Configurare Mailjet SMTP
-const transporter = nodemailer.createTransport({
-  host: "in-v3.mailjet.com",
-  port: 587,
-  secure: false, // upgrade later with STARTTLS
-  auth: {
-    user: process.env.MAILJET_API_KEY,
-    pass: process.env.MAILJET_API_SECRET
-  }
-});
+// Configurare Mailjet API Client
+const mailjet = Mailjet.apiConnect(
+  process.env.MAILJET_API_KEY,
+  process.env.MAILJET_API_SECRET
+);
 
 const sendEmail = async (to, subject, html, attachments = []) => {
   // Verificam daca trimiterea de emailuri este activata in .env
@@ -20,21 +15,51 @@ const sendEmail = async (to, subject, html, attachments = []) => {
     return;
   }
 
+  // Separăm atașamentele inline (cele cu CID) de cele normale
+  const inlinedAttachments = attachments.filter(att => att.cid).map(att => ({
+    ContentType: "image/png",
+    Filename: att.filename,
+    ContentID: att.cid,
+    Base64Content: att.path.includes('base64,') ? att.path.split('base64,')[1] : att.path
+  }));
+
+  const regularAttachments = attachments.filter(att => !att.cid).map(att => ({
+    ContentType: "application/pdf", // Default, poate fi ajustat dacă e cazul
+    Filename: att.filename,
+    Base64Content: att.path.includes('base64,') ? att.path.split('base64,')[1] : att.path
+  }));
+
   try {
-    const mailOptions = {
-      from: `"Univent Team" <${process.env.EMAIL_SENDER}>`, // Adresa verificată în Mailjet
-      to,
-      subject,
-      html,
-      attachments
-    };
-    await transporter.sendMail(mailOptions);
+    const request = mailjet
+      .post("send", { 'version': 'v3.1' })
+      .request({
+        Messages: [
+          {
+            From: {
+              Email: process.env.EMAIL_SENDER,
+              Name: "Univent Team"
+            },
+            To: [
+              {
+                Email: to,
+                Name: "" // Putem adăuga numele dacă îl avem disponibil în funcție
+              }
+            ],
+            Subject: subject,
+            HTMLPart: html,
+            InlinedAttachments: inlinedAttachments.length > 0 ? inlinedAttachments : undefined,
+            Attachments: regularAttachments.length > 0 ? regularAttachments : undefined
+          }
+        ]
+      });
+
+    const result = await request;
     console.log(`✅ Email trimis către: ${to}`);
   } catch (error) {
-    console.error(`❌ Eroare la trimiterea emailului către ${to}:`, error);
-    // Logăm eroarea completă pentru debug
-    if (error.response) {
-      console.error(error.response);
+    console.error(`❌ Eroare la trimiterea emailului către ${to}:`, error.message);
+    if (error.statusCode) {
+      console.error('Status Code:', error.statusCode);
+      console.error('Error info:', error.response?.text);
     }
   }
 };
@@ -42,10 +67,13 @@ const sendEmail = async (to, subject, html, attachments = []) => {
 const sendTicketEmail = async (toEmail, userName, eventTitle, eventDate, ticketId, qrCodeContent) => {
   const subject = `Biletul tău pentru: ${eventTitle}`;
   const qrDataUrl = await qrcode.toDataURL(qrCodeContent);
+  
+  // Pregătim atașamentul pentru API-ul Mailjet
+  // Nota: 'path' aici conține string-ul base64 complet (data:image/png;base64,...)
   const qrAttachment = {
     filename: 'qrcode.png',
     path: qrDataUrl,
-    cid: 'qrcode'
+    cid: 'qrcode' // Marchează ca fiind inline
   };
 
   const html = `
